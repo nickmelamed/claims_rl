@@ -1,5 +1,5 @@
-from env.environment import ClaimEnv
-from env.curriculum import Curriculum
+from environment.environment import ClaimEnv
+from environment.curriculum import Curriculum
 from judge.judge import Judge
 from agent.policy import RandomPolicy
 from agent.trainer import Trainer

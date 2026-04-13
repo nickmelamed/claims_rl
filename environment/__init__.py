@@ -5,7 +5,7 @@ from .state import Evidence, State
 
 __all__ = [
     'Actions',
-    'Curriculm',
+    'Curriculum',
     'ClaimEnv',
     'Evidence',
     'State'

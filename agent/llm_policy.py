@@ -1,5 +1,5 @@
 import json
-from env.actions import Actions
+from environment.actions import Actions
 
 
 class LLMPolicy:

@@ -1,5 +1,5 @@
 import random
-from env.actions import Actions
+from environment.actions import Actions
 
 
 class RandomPolicy:
