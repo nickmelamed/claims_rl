@@ -1,6 +1,82 @@
-# cache 
-*__pycache__*
-*.pyc
+# python cache/bytecode
 
-# environment 
-claims_rl
+**pycache**/
+*.py[cod]
+*$py.class
+
+# venvs
+
+.venv/
+venv/
+env/
+ENV/
+claims_rl/  
+
+# testing/coverage
+
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+
+# build/packaging
+
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# logs/runtime
+
+*.log
+logs/
+*.out
+*.err
+
+# IDE/editor
+
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# env vars
+
+.env
+.env.*
+*.env
+
+# data/artifacts
+
+data/raw/
+data/processed/
+artifacts/
+outputs/
+checkpoints/
+models/
+*.pt
+*.pth
+*.ckpt
+*.bin
+
+# llm/HF cache
+.cache/
+huggingface/
+hf_cache/
+*.safetensors
+
+# docker
+
+*.pid
+*.seed
+
+# misc
+*.sqlite3
+*.db
+*.pickle
+*.pkl
+
+# jupyter
+
+.ipynb_checkpoints/
