@@ -1,5 +1,6 @@
 import os
 import json
+import csv
 from datetime import datetime
 
 
@@ -12,20 +13,26 @@ class ExperimentTracker:
         os.makedirs(self.base_dir, exist_ok=True)
 
         self.metrics = []
+        self.csv_path = os.path.join(self.base_dir, "metrics.csv")
 
     def save_config(self, config: dict):
-        path = os.path.join(self.base_dir, "config.json")
-        with open(path, "w") as f:
+        with open(os.path.join(self.base_dir, "config.json"), "w") as f:
             json.dump(config, f, indent=2)
 
     def log(self, metrics: dict):
         self.metrics.append(metrics)
 
-        path = os.path.join(self.base_dir, "metrics.json")
-        with open(path, "w") as f:
+        # JSON
+        with open(os.path.join(self.base_dir, "metrics.json"), "w") as f:
             json.dump(self.metrics, f, indent=2)
 
-    def log_text(self, text: str):
-        path = os.path.join(self.base_dir, "logs.txt")
-        with open(path, "a") as f:
-            f.write(text + "\n")
+        # CSV (append)
+        write_header = not os.path.exists(self.csv_path)
+        with open(self.csv_path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=metrics.keys())
+            if write_header:
+                writer.writeheader()
+            writer.writerow(metrics)
+
+    def get_dir(self):
+        return self.base_dir

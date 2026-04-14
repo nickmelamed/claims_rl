@@ -38,6 +38,12 @@ pytest
 train-exp:
 $(PYTHON) scripts/train.py --exp_name=default
 
+plot:
+	python scripts/plot.py --path=$(path)
+
+compare:
+	python scripts/compare.py --paths $(paths)
+
 # full reset
 
 reset: clean

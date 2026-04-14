@@ -36,3 +36,16 @@ class RewardFunction:
             reward -= 0.2
 
         return max(0.0, min(1.0, reward))
+    
+class RewardModel:
+    def __init__(self, judge):
+        self.judge = judge
+
+    def compute_reward(self, state, action, next_state):
+        """
+        Use LLM judge to score trajectory
+        """
+        score = self.judge.evaluate(state, action, next_state)
+
+        # normalize to [0,1]
+        return max(0.0, min(1.0, score))
