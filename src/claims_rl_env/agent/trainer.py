@@ -1,21 +1,35 @@
+from claims_rl_env.utils.experiment import ExperimentTracker
+
 class Trainer:
-    def __init__(self, env, policy):
-        self.env = env
+    def __init__(self, environment, policy, judge, episodes=100, exp_name="default"):
+        self.env = environment
         self.policy = policy
+        self.judge = judge
+        self.episodes = episodes
 
-    def run_episode(self):
-        state = self.env.reset()
-        done = False
+        self.tracker = ExperimentTracker(exp_name)
 
-        while not done:
-            action, payload = self.policy.act(state)
-            state, reward, done, _ = self.env.step(action, payload)
+    def train(self):
+        results = []
 
-        return reward
+        for episode in range(self.episodes):
+            state = self.env.reset()
+            done = False
+            total_reward = 0
 
-    def train(self, episodes=100):
-        rewards = []
-        for _ in range(episodes):
-            r = self.run_episode()
-            rewards.append(r)
-        return rewards
+            while not done:
+                action = self.policy.act(state)
+                state, reward, done, _ = self.env.step(action)
+                total_reward += reward
+
+            metrics = {
+                "episode": episode,
+                "reward": total_reward,
+                #"steps": step_count,
+                "success": done,
+            }
+
+            self.tracker.log(metrics)
+            results.append(metrics)
+
+        return results
