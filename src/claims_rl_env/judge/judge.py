@@ -1,4 +1,4 @@
-from judge.reward import RewardFunction
+from claims_rl_env.judge.reward import RewardFunction
 
 
 class Judge:

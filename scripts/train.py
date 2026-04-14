@@ -1,9 +1,9 @@
-from environment.environment import ClaimEnv
-from environment.curriculum import Curriculum
-from judge.judge import Judge
-from agent.policy import RandomPolicy
-from agent.trainer import Trainer
-from data.dataset import load_dataset
+from claims_rl_env.environment.environment import ClaimEnv
+from claims_rl_env.environment.curriculum import Curriculum
+from claims_rl_env.judge.judge import Judge
+from claims_rl_env.agent.policy import RandomPolicy
+from claims_rl_env.agent.trainer import Trainer
+from claims_rl_env.data.dataset import load_dataset
 
 
 def main():

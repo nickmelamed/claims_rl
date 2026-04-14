@@ -1,6 +1,6 @@
 import random
-from environment.state import State
-from environment.actions import Actions
+from claims_rl_env.environment.state import State
+from claims_rl_env.environment.actions import Actions
 
 
 class ClaimEnv:

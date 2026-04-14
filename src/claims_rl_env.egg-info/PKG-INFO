@@ -1,0 +1,8 @@
+Metadata-Version: 2.4
+Name: claims_rl_env
+Version: 0.1.0
+Summary: RL environment for LLM training for Claims Evaluation
+Author: Nick Melamed
+Requires-Python: >=3.10
+Requires-Dist: numpy
+Requires-Dist: tqdm

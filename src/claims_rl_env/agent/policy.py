@@ -1,5 +1,5 @@
 import random
-from environment.actions import Actions
+from claims_rl_env.environment.actions import Actions
 
 
 class RandomPolicy:

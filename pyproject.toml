@@ -1,0 +1,18 @@
+[project]
+name = "claims_rl_env"
+version = "0.1.0"
+description = "RL environment for LLM training for Claims Evaluation"
+authors = [{name = "Nick Melamed"}]
+requires-python = ">=3.10"
+
+dependencies = [
+    "numpy",
+    "tqdm"
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[project.scripts]
+train-rl = "scripts.train:main"
+run-episode = "scripts.run_episode:main"
