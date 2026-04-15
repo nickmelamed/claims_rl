@@ -1,59 +1,42 @@
 import json
 from claims_rl_env.environment.actions import Actions
 
-
 class LLMPolicy:
-    def __init__(self, llm_client):
-        self.llm = llm_client
+    def __init__(self, llm):
+        self.llm = llm
 
     def build_prompt(self, state):
-        evidence_list = "\n".join([
-            f"[{e.id}] ({e.label}) {e.text}"
-            for e in state.evidence_pool
-        ])
-
+        evidence = "\n".join([f"[{e.id}] {e.text}" for e in state.evidence_pool])
         selected = [e.id for e in state.selected_evidence]
 
-        prompt = f"""
-You are an RL agent solving a claim verification task.
+        return f"""
+CLAIM: {state.claim}
 
-CLAIM:
-{state.claim}
+EVIDENCE:
+{evidence}
 
-AVAILABLE EVIDENCE:
-{evidence_list}
+SELECTED: {selected}
+DEBATE: {state.debate_history}
 
-SELECTED EVIDENCE IDS:
-{selected}
+Choose ONE action:
+select_evidence(id)
+remove_evidence(id)
+generate_support_argument(text)
+generate_contradict_argument(text)
+finalize
 
-DEBATE HISTORY:
-{state.debate_history}
-
-You may take ONE action:
-
-- select_evidence(id)
-- remove_evidence(id)
-- generate_support_argument(text)
-- generate_contradict_argument(text)
-- finalize
-
-Respond ONLY in JSON:
-{{
-  "action": "...",
-  "payload": ...
-}}
+Return JSON:
+{{"action": "...", "payload": ...}}
 """
-        return prompt
 
-    def parse_action(self, response_text):
+    def parse(self, text):
         try:
-            data = json.loads(response_text)
-            return data["action"], data.get("payload", None)
+            data = json.loads(text)
+            return data["action"], data.get("payload")
         except:
             return Actions.FINALIZE, None
 
     def act(self, state):
         prompt = self.build_prompt(state)
         response = self.llm.generate(prompt)
-
-        return self.parse_action(response)
+        return self.parse(response)

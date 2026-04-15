@@ -1,34 +1,40 @@
 from claims_rl_env.environment.environment import ClaimEnv
-from claims_rl_env.environment.curriculum import Curriculum
-from claims_rl_env.judge.judge import Judge
 from claims_rl_env.data.dataset import load_dataset
 from claims_rl_env.agent.llm_policy import LLMPolicy
-from claims_rl_env.agent.llm_client import DummyLLM
+from claims_rl_env.agent.llm_client import LLMClient
 
 
 def main():
     dataset = load_dataset()
-    curriculum = Curriculum()
-    judge = Judge()
 
-    env = ClaimEnv(dataset, judge, curriculum)
+    env = ClaimEnv(dataset)
 
-    llm = DummyLLM()
+    llm = LLMClient()
     policy = LLMPolicy(llm)
 
     state = env.reset()
     done = False
 
+    step = 0
+
+    print("\n=== START EPISODE ===")
+    print("CLAIM:", state.claim)
+
     while not done:
         action, payload = policy.act(state)
         state, reward, done, _ = env.step(action, payload)
 
-        print("\n--- STEP RESULT ---")
+        step += 1
+
+        print(f"\n--- STEP {step} ---")
         print("Action:", action)
+        print("Payload:", payload)
         print("Selected:", [e.id for e in state.selected_evidence])
         print("Debate:", state.debate_history)
 
-    print("\n=== FINAL REWARD ===", reward)
+    print("\n=== FINAL ===")
+    print("Steps:", step)
+    print("Final Reward:", round(reward, 3))
 
 
 if __name__ == "__main__":

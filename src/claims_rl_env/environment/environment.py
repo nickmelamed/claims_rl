@@ -1,30 +1,36 @@
 import random
-from claims_rl_env.environment.state import State
+import numpy as np
+
+from claims_rl_env.environment.state import State, Evidence
 from claims_rl_env.environment.actions import Actions
+from claims_rl_env.judge.reward import RewardFunction
 
 
 class ClaimEnv:
-    def __init__(self, dataset, judge, curriculum):
+    def __init__(self, dataset):
         self.dataset = dataset
-        self.judge = judge
-        self.curriculum = curriculum
         self.state = None
+        self.current_sample = None
+        self.reward_fn = RewardFunction()
 
     def reset(self):
-        sample = self.curriculum.sample(self.dataset)
+        self.current_sample = random.choice(self.dataset)
+
         self.state = State(
-            claim=sample["claim"],
-            evidence_pool=sample["evidence"]
+            claim=self.current_sample["claim"],
+            evidence_pool=[Evidence(**e) for e in self.current_sample["evidence"]]
         )
+
         return self.state
 
-    def step(self, action, payload=None):
+    def step(self, action, payload):
         s = self.state
         s.steps_taken += 1
 
+        # action handling
         if action == Actions.SELECT:
-            doc = next(e for e in s.evidence_pool if e.id == payload)
-            if doc not in s.selected_evidence:
+            doc = next((e for e in s.evidence_pool if e.id == payload), None)
+            if doc and doc not in s.selected_evidence:
                 s.selected_evidence.append(doc)
 
         elif action == Actions.REMOVE:
@@ -33,14 +39,47 @@ class ClaimEnv:
             ]
 
         elif action == Actions.SUPPORT:
-            s.debate_history.append("SUPPORT: " + payload)
+            if payload:
+                s.debate_history.append("SUPPORT: " + str(payload))
 
         elif action == Actions.CONTRADICT:
-            s.debate_history.append("CONTRADICT: " + payload)
+            if payload:
+                s.debate_history.append("CONTRADICT: " + str(payload))
 
         elif action == Actions.FINALIZE:
-            reward = self.judge.evaluate(s)
+            # build the final output 
+            reasoning = " ".join(s.debate_history)
+
+            # confidence heuristic
+            confidence = min(1.0, len(s.selected_evidence) / 3)
+
+            # use dataset ground truth if available
+            if "label" in self.current_sample:
+                true_score = float(self.current_sample["label"])
+            else:
+                # fallback heuristic
+                true_score = (
+                    np.mean([
+                        1 if e.label == "support" else 0
+                        for e in s.selected_evidence
+                    ])
+                    if s.selected_evidence else 0
+                )
+
+            final_output = {
+                "reasoning": reasoning,
+                "confidence": confidence,
+                "true_score": true_score
+            }
+
+            reward = self.reward_fn.compute(s, final_output)
+
             return s, reward, True, {}
 
-        done = s.is_done()
-        return s, 0.0, done, {}
+        # step limit termination
+        if s.is_done():
+            # penalize not finalizing
+            return s, -0.2, True, {}
+
+        # default step
+        return s, 0.0, False, {}

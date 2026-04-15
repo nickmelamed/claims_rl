@@ -1,8 +1,9 @@
-class DummyLLM:
-    def generate(self, prompt):
-        print("\n===== PROMPT =====\n")
-        print(prompt)
+from transformers import pipeline
 
-        # manual input for testing
-        response = input("\nEnter JSON action: ")
-        return response
+class LLMClient:
+    def __init__(self, model_name="google/flan-t5-base"):
+        self.pipe = pipeline("text-generation", model=model_name)
+
+    def generate(self, prompt):
+        out = self.pipe(prompt, max_new_tokens=128)[0]["generated_text"]
+        return out
