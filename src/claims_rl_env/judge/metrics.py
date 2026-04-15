@@ -11,12 +11,3 @@ def compute_ecs(selected):
 
 def compute_adversarial_penalty(selected):
     return np.mean([1 if e.label == "adversarial" else 0 for e in selected]) if selected else 0
-
-
-def compute_lcs(debate):
-    return min(1.0, len(debate) / 5)
-
-
-def compute_hls(text):
-    hedges = ["might", "could", "possibly"]
-    return sum(1 for h in hedges if h in text.lower()) / 3

@@ -1,5 +1,3 @@
-# TODO: action masking? 
-
 import numpy as np
 from claims_rl_env.environment.actions import Actions, ACTIONS
 

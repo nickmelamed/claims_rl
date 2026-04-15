@@ -1,6 +1,5 @@
 from claims_rl_env.environment.environment import ClaimEnv
 from claims_rl_env.data.dataset import load_dataset
-from claims_rl_env.agent.llm_policy import LLMPolicy
 from claims_rl_env.agent.llm_client import LLMClient
 from claims_rl_env.agent.policy import SoftmaxPolicy
 from claims_rl_env.environment.actions import ACTIONS
@@ -11,8 +10,6 @@ def main():
 
     env = ClaimEnv(dataset)
 
-    #llm = LLMClient()
-    #policy = LLMPolicy(llm)
     policy = SoftmaxPolicy(len(ACTIONS))
 
     state = env.reset()

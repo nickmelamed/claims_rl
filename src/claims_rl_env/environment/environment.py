@@ -4,6 +4,8 @@ import numpy as np
 from claims_rl_env.environment.state import State, Evidence
 from claims_rl_env.environment.actions import Actions
 from claims_rl_env.judge.reward import RewardFunction
+from claims_rl_env.judge.llm_judge import LLMJudge
+from claims_rl_env.agent.llm_client import LLMClient
 
 
 class ClaimEnv:
@@ -12,6 +14,9 @@ class ClaimEnv:
         self.state = None
         self.current_sample = None
         self.reward_fn = RewardFunction()
+
+        llm = LLMClient()
+        self.llm_judge = LLMJudge(llm, weight=0.5)
 
     def reset(self):
         self.current_sample = random.choice(self.dataset)
@@ -26,6 +31,7 @@ class ClaimEnv:
     def step(self, action, payload):
         s = self.state
         s.steps_taken += 1
+        reward = 0.0
 
         # action handling
         if action == Actions.SELECT:
@@ -42,9 +48,32 @@ class ClaimEnv:
             if payload:
                 s.debate_history.append("SUPPORT: " + str(payload))
 
+                # mid-episode shaping
+                partial_reasoning = " ".join(s.debate_history)
+
+                llm_reward, _ = self.llm_judge.compute_reward(
+                    claim=s.claim,
+                    reasoning=partial_reasoning,
+                    evidence=s.selected_evidence
+                )
+
+                reward = 0.1 + 0.1 * llm_reward  # base + LLM shaping
+
+
         elif action == Actions.CONTRADICT:
             if payload:
                 s.debate_history.append("CONTRADICT: " + str(payload))
+
+                partial_reasoning = " ".join(s.debate_history)
+
+                llm_reward, _ = self.llm_judge.compute_reward(
+                    claim=s.claim,
+                    reasoning=partial_reasoning,
+                    evidence=s.selected_evidence
+                )
+
+                reward = 0.1 + 0.1 * llm_reward
+
 
         elif action == Actions.FINALIZE:
             # build the final output 
@@ -80,7 +109,20 @@ class ClaimEnv:
                 "true_score": true_score
             }
 
-            reward = self.reward_fn.compute(s, final_output)
+            # hybrid reward calculation 
+            # base reward
+            base_reward = self.reward_fn.compute(s, final_output)
+
+            # llm reward
+            llm_reward, llm_scores = self.llm_judge.compute_reward(
+                claim=s.claim,
+                reasoning=reasoning,
+                evidence=s.selected_evidence
+            )
+
+            # RLHF
+            alpha = 0.3
+            reward = (1 - alpha) * base_reward + alpha * llm_reward
 
             # penalty for empty debate 
             if not s.debate_history:
@@ -96,13 +138,12 @@ class ClaimEnv:
             # penalize not finalizing
             return s, -0.2, True, {}
 
-        # intermediate reward shaping
-        reward = 0.0
-
-        if action == Actions.SELECT:
-            reward += 0.1
-
-        elif action in [Actions.SUPPORT, Actions.CONTRADICT]:
-            reward += 0.1
+        # fallback
+        if reward == 0.0:
+            if action == Actions.SELECT:
+                reward = 0.1
+            elif action == Actions.REMOVE:
+                reward = -0.05  # discourage useless removal
+        
 
         return s, reward, False, {}

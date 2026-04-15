@@ -1,17 +1,13 @@
-from claims_rl_env.judge.llm_judge import LLMJudge
-
 from claims_rl_env.judge.metrics import (
     compute_ess,
     compute_ecs,
-    compute_lcs,
-    compute_hls,
     compute_adversarial_penalty
 )
 
 
 class RewardFunction:
     def __init__(self):
-        self.llm_judge = LLMJudge()
+        pass
 
     def compute(self, state, final_output):
         """
@@ -28,12 +24,6 @@ class RewardFunction:
         ess = compute_ess(state.selected_evidence)
         ecs = compute_ecs(state.selected_evidence)
 
-        # llm 
-        llm_scores = self.llm_judge.evaluate_reasoning(reasoning)
-
-        lcs = llm_scores["LCS"]
-        hls = llm_scores["HLS"]
-
         adversarial_penalty = compute_adversarial_penalty(state.selected_evidence)
 
         # uncertainty calibration
@@ -44,12 +34,10 @@ class RewardFunction:
 
         # reward aggregation
         reward = (
-            0.35 * ess
-            + 0.25 * (1 - ecs)
-            + 0.15 * lcs
-            - 0.10 * hls
-            - 0.15 * adversarial_penalty
-            - 0.20 * uncertainty_penalty
+            0.4 * ess
+            + 0.3 * (1 - ecs)
+            - 0.2 * adversarial_penalty
+            - 0.2 * uncertainty_penalty
         )
 
         # anti-gaming penalties
