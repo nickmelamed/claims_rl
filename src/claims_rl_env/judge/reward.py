@@ -1,3 +1,5 @@
+from claims_rl_env.judge.llm_judge import LLMJudge
+
 from claims_rl_env.judge.metrics import (
     compute_ess,
     compute_ecs,
@@ -8,6 +10,9 @@ from claims_rl_env.judge.metrics import (
 
 
 class RewardFunction:
+    def __init__(self):
+        self.llm_judge = LLMJudge()
+
     def compute(self, state, final_output):
         """
         Final_output must contain:
@@ -16,14 +21,18 @@ class RewardFunction:
         - true_score (float)
         """
 
+        # pass reasoning text, not dict
+        reasoning = final_output.get("reasoning", "")
+
         # core metrics
         ess = compute_ess(state.selected_evidence)
         ecs = compute_ecs(state.selected_evidence)
-        lcs = compute_lcs(state.debate_history)
 
-        # pass reasoning text, not dict
-        reasoning = final_output.get("reasoning", "")
-        hls = compute_hls(reasoning)
+        # llm 
+        llm_scores = self.llm_judge.evaluate_reasoning(reasoning)
+
+        lcs = llm_scores["LCS"]
+        hls = llm_scores["HLS"]
 
         adversarial_penalty = compute_adversarial_penalty(state.selected_evidence)
 

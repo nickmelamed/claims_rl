@@ -7,6 +7,6 @@ class PolicyGradient:
         self.lr = lr
 
     def update(self, trajectories):
-        for state, action, reward in trajectories:
-            grad = self.policy.grad_log_prob(state, action)
+        for state, action_idx, reward in trajectories:
+            grad = self.policy.grad_log_prob(action_idx)
             self.policy.params += self.lr * grad * reward

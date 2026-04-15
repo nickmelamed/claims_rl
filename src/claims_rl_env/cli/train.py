@@ -1,8 +1,10 @@
 from claims_rl_env.environment.environment import ClaimEnv
 from claims_rl_env.environment.curriculum import Curriculum
-from claims_rl_env.agent.policy import RandomPolicy
+from claims_rl_env.agent.policy import SoftmaxPolicy
 from claims_rl_env.agent.trainer import Trainer
+from claims_rl_env.environment.actions import ACTIONS
 from claims_rl_env.data.dataset import load_dataset
+
 import argparse
 
 def train(episodes):
@@ -13,7 +15,9 @@ def train(episodes):
     sampled_dataset = [curriculum.sample(dataset) for _ in range(len(dataset))]
 
     env = ClaimEnv(sampled_dataset)
-    policy = RandomPolicy()
+
+    n_actions = len(list(ACTIONS))
+    policy = SoftmaxPolicy(n_actions)
 
     trainer = Trainer(env, policy, episodes=episodes)
 
@@ -26,7 +30,7 @@ def train(episodes):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--episodes", default=50)
+    parser.add_argument("--episodes", type=int, default=50)
     args = parser.parse_args()
 
     train(args.episodes)
