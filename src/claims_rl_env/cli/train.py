@@ -3,9 +3,9 @@ from claims_rl_env.environment.curriculum import Curriculum
 from claims_rl_env.agent.policy import RandomPolicy
 from claims_rl_env.agent.trainer import Trainer
 from claims_rl_env.data.dataset import load_dataset
+import argparse
 
-
-def main():
+def train(episodes):
     dataset = load_dataset()
     curriculum = Curriculum()
 
@@ -15,7 +15,7 @@ def main():
     env = ClaimEnv(sampled_dataset)
     policy = RandomPolicy()
 
-    trainer = Trainer(env, policy, episodes=50)
+    trainer = Trainer(env, policy, episodes=episodes)
 
     results = trainer.train()
 
@@ -24,6 +24,12 @@ def main():
     print("\n=== TRAINING COMPLETE ===")
     print("Avg reward:", round(avg_reward, 3))
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--episodes", default=50)
+    args = parser.parse_args()
+
+    train(args.episodes)
 
 if __name__ == "__main__":
     main()
