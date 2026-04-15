@@ -36,3 +36,12 @@ class ExperimentTracker:
 
     def get_dir(self):
         return self.base_dir
+    
+    def save(self):
+        summary = {
+            "total_episodes": len(self.metrics),
+            "avg_reward": sum(m["reward"] for m in self.metrics) / max(len(self.metrics), 1)
+        }
+
+        with open(os.path.join(self.base_dir, "summary.json"), "w") as f:
+            json.dump(summary, f, indent=2)

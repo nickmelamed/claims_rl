@@ -1,7 +1,7 @@
 from transformers import pipeline
 
 class LLMClient:
-    def __init__(self, model_name="google/flan-t5-base"):
+    def __init__(self, model_name="microsoft/phi-2"):
         self.pipe = pipeline("text-generation", model=model_name)
 
     def generate(self, prompt):

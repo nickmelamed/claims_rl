@@ -73,6 +73,6 @@ class Trainer:
                 self.policy.update(trajectory)
 
         # finalize experiment
-        self.tracker.save()  # if your tracker supports it
+        self.tracker.save() 
 
         return results

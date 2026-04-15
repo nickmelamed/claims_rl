@@ -50,6 +50,14 @@ class ClaimEnv:
             # build the final output 
             reasoning = " ".join(s.debate_history)
 
+            # penalty for 0 evidence 
+            if len(s.selected_evidence) == 0:
+                return s, -1.0, True, {}
+            
+            # penalty for not taking enough steps
+            if s.steps_taken <= 2:
+                return s, -0.5, False, {}
+
             # confidence heuristic
             confidence = min(1.0, len(s.selected_evidence) / 3)
 
@@ -73,6 +81,13 @@ class ClaimEnv:
             }
 
             reward = self.reward_fn.compute(s, final_output)
+
+            # penalty for empty debate 
+            if not s.debate_history:
+                reward -= 0.3
+
+            # reward for evidence use
+            reward *= 0.2 * len(s.selected_evidence)
 
             return s, reward, True, {}
 
