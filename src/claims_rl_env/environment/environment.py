@@ -87,7 +87,7 @@ class ClaimEnv:
                 reward -= 0.3
 
             # reward for evidence use
-            reward *= 0.2 * len(s.selected_evidence)
+            reward += 0.2 * len(s.selected_evidence)
 
             return s, reward, True, {}
 
@@ -96,5 +96,13 @@ class ClaimEnv:
             # penalize not finalizing
             return s, -0.2, True, {}
 
-        # default step
-        return s, 0.0, False, {}
+        # intermediate reward shaping
+        reward = 0.0
+
+        if action == Actions.SELECT:
+            reward += 0.1
+
+        elif action in [Actions.SUPPORT, Actions.CONTRADICT]:
+            reward += 0.1
+
+        return s, reward, False, {}
