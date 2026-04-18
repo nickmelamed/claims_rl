@@ -35,6 +35,21 @@ pytest
 
 # experiments
 
+train-ppo:
+	train-rl --method ppo --episodes 100
+
+train-pg:
+	train-rl --method pg --episodes 100
+
+train-bandit:
+	train-rl --method bandit --episodes 100
+
+compare:
+	compare-exp --paths artifacts/experiments/*
+
+dashboard:
+	streamlit run dashboard/app.py
+
 train-exp:
 $(PYTHON) scripts/train.py --exp_name=default
 
