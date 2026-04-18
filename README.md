@@ -145,6 +145,23 @@ Saved as:
 logs/experiment_results.csv
 ```
 
+Plot single experiment results with: 
+
+```bash
+python visualize.py --file logs/<experiment_name>.csv
+```
+
+This will show learning curve, moving average reward, and action distribution trends. 
+
+To compare multiple experiments: 
+
+```bash
+python compare_experiments.py \
+    --files logs/ppo_run.csv logs/pg_run.csv logs/bandit_run.csv
+```
+
+You can compare multiple RL methods and  evaluate hyperparameter changes via overlayed reward curves, final performance comparison, and convergence speed analysis. 
+
 ---
 
 ## Reward Design

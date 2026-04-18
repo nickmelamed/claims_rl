@@ -18,6 +18,9 @@ class SoftmaxPolicy:
     def act(self, state):
         probs = self.get_probs()
 
+        entropy = -np.sum(probs * np.log(probs + 1e-8))
+        self.last_entropy = entropy
+
         # mask FINALIZE early
         if state.steps_taken < 2:
             finalize_idx = self.actions.index(Actions.FINALIZE)
