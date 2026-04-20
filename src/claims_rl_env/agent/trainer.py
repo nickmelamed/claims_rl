@@ -89,10 +89,19 @@ class Trainer:
                 probs = getattr(self.policy, "last_probs", None)
 
                 # trajectory entry
+                argument = None
+                evidence_ids = None
+
+                if isinstance(payload, dict):
+                    argument = payload.get("argument")
+                    evidence_ids = payload.get("evidence")
+
                 viz_trajectory.append({
                     "step": steps + 1,
                     "action": str(action),
                     "reward": float(reward),
+                    "argument": argument,
+                    "evidence_used": evidence_ids,
                     "selected_ids": [e.id for e in next_state.selected_evidence],
                     "action_probs": probs.tolist() if probs is not None else None,
                     "action_names": [str(a) for a in ACTIONS],

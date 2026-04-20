@@ -1,5 +1,6 @@
 import numpy as np
 from claims_rl_env.environment.actions import Actions, ACTIONS
+from claims_rl_env.agent.llm_client import LLMClient
 
 
 class SoftmaxPolicy:
@@ -10,6 +11,8 @@ class SoftmaxPolicy:
 
         finalize_idx = self.actions.index(Actions.FINALIZE)
         self.params[finalize_idx] = -2.0
+
+        self.llm = LLMClient()
 
     def get_logits(self):
         return self.params
@@ -49,7 +52,26 @@ class SoftmaxPolicy:
             return action, doc.id
 
         elif action in [Actions.SUPPORT, Actions.CONTRADICT]:
-            return action, "Generated argument"
+
+            selected_texts = [
+                e.text for e in state.selected_evidence
+            ]
+
+            argument = self.llm.generate(
+                f"""
+            Claim: {state.claim}
+
+            Evidence:
+            {selected_texts}
+
+            Write a concise {action.lower()} argument.
+            """
+            )
+
+            return action, {
+                "argument": argument,
+                "evidence_ids": [e.id for e in state.selected_evidence]
+            }
 
         return action, None
 

@@ -210,6 +210,21 @@ with tab3:
 
         step = traj[step_idx - 1]
 
+        st.subheader("Generated Argument")
+
+        if step.get("argument"):
+            st.info(step['argument'])
+        else:
+            st.write("No argument generated this step")
+
+        st.subheader("Evidence Used")
+        evidence_ids = step.get("evidence_used", [])
+        evidence_pool = step.get("evidence_pool", [])
+
+        for e in evidence_pool:
+            if e["id"] in (evidence_ids or []):
+                st.success(f"[{e['id']}] {e['text']}")
+
         st.json(step)
 
         st.subheader("Policy Distribution")
