@@ -11,12 +11,18 @@ class SoftmaxPolicy:
         finalize_idx = self.actions.index(Actions.FINALIZE)
         self.params[finalize_idx] = -2.0
 
+    def get_logits(self):
+        return self.params
+
     def get_probs(self):
-        exp = np.exp(self.params)
+        logits = self.get_logits()
+        logits = logits - np.max(logits) # numeric stability
+        exp = np.exp(logits)
         return exp / np.sum(exp)
 
+
     def act(self, state):
-        probs = self.get_probs()
+        probs = self.get_probs().copy() # make it writable
 
         entropy = -np.sum(probs * np.log(probs + 1e-8))
         self.last_entropy = entropy
@@ -26,6 +32,8 @@ class SoftmaxPolicy:
             finalize_idx = self.actions.index(Actions.FINALIZE)
             probs[finalize_idx] = 0
             probs = probs / np.sum(probs)
+
+        self.last_probs = probs.copy()
 
         # epsilon-greedy exploration
         if np.random.rand() < 0.3:

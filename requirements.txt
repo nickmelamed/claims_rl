@@ -6,7 +6,7 @@ blinker==1.9.0
 cachetools==7.0.5
 certifi==2026.2.25
 charset-normalizer==3.4.7
--e git+https://github.com/nickmelamed/claims_rl.git@429a99aa5dd7dca69647a1bf373317f56bfba6df#egg=claims_rl_env
+-e git+https://github.com/nickmelamed/claims_rl.git@93d59910d4fae918b2cf0335953d9fe48037545a#egg=claims_rl_env
 click==8.3.2
 contourpy==1.3.3
 cycler==0.12.1
@@ -71,3 +71,4 @@ transformers==5.5.4
 typer==0.24.1
 typing_extensions==4.15.0
 urllib3==2.6.3
+watchdog==6.0.0

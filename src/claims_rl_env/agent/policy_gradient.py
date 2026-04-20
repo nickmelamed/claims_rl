@@ -16,4 +16,8 @@ class PolicyGradient:
             normalized_reward = (reward - mean) / std
 
             grad = self.policy.grad_log_prob(action_idx)
-            self.policy.params += self.lr * grad * normalized_reward
+            grad = np.array(grad)
+
+            update = self.lr * grad * normalized_reward
+
+            self.policy.params = self.policy.params + update

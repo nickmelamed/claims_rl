@@ -48,7 +48,8 @@ class Trainer:
             steps = 0
 
             # trajectory storage
-            trajectory = []
+            rl_trajectory = []
+            viz_trajectory = []
 
             # behavior tracking
             support_count = 0
@@ -85,12 +86,17 @@ class Trainer:
                 elif action == Actions.REMOVE or action == "remove_evidence":
                     removed_count += 1
 
+                probs = getattr(self.policy, "last_probs", None)
+
                 # trajectory entry
-                trajectory.append({
+                viz_trajectory.append({
                     "step": steps + 1,
                     "action": str(action),
                     "reward": float(reward),
                     "selected_ids": [e.id for e in next_state.selected_evidence],
+                    "action_probs": probs.tolist() if probs is not None else None,
+                    "action_names": [str(a) for a in ACTIONS],
+                    "entropy": getattr(self.policy, "last_entropy", None),
 
                     # evidence + claim 
                     "claim": state.claim,
@@ -102,10 +108,12 @@ class Trainer:
 
                 # RL storage 
                 if self.algo == 'ppo':
-                    old_prob = self.policy.get_probs(action_idx)
-                    self.rl.store(state, action_idx, old_prob, reward)
+                    old_prob = self.policy.get_probs()[action_idx]  # 🔥 FIX
+                    rl_trajectory.append((state, action_idx, old_prob, reward))
+
                 elif self.algo == 'pg':
-                    self.rl.store(state, action_idx, reward)
+                    rl_trajectory.append((state, action_idx, reward))
+
                 elif self.algo == 'bandit':
                     self.rl.update(action_idx, reward)
 
@@ -114,8 +122,11 @@ class Trainer:
                 steps += 1
 
             # policy update 
-            if self.algo in ['pg', 'ppo']:
-                self.rl.update()
+            if self.algo == 'pg':
+                self.rl.update(rl_trajectory)
+
+            elif self.algo == 'ppo':
+                self.rl.update(rl_trajectory)
 
             # metrics logging 
             metrics = {
@@ -136,7 +147,7 @@ class Trainer:
             self.tracker.log_episode(metrics)
 
             # save trajectory
-            self.tracker.save_trajectory(ep, trajectory)
+            self.tracker.save_trajectory(ep, viz_trajectory)
 
             print(
                 f"Episode {ep:03d} | "

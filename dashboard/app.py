@@ -7,19 +7,15 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
-st.title("🧠 Claims RL Dashboard")
+st.title("Claims RL Dashboard")
 
 BASE_DIR = "artifacts/experiments"
 
-# -----------------------
-# Sidebar Controls
-# -----------------------
-auto_refresh = st.sidebar.checkbox("🔴 Live Monitoring", value=False)
+# sidebar
+auto_refresh = st.sidebar.checkbox("Live Monitoring", value=False)
 refresh_rate = st.sidebar.slider("Refresh (sec)", 1, 10, 3)
 
-# -----------------------
-# Helpers
-# -----------------------
+# helpers
 def list_experiments():
     return [
         os.path.join(BASE_DIR, d)
@@ -49,9 +45,7 @@ def load_trajectory(exp_path, episode):
             return json.load(f)
     return []
 
-# -----------------------
-# Load experiments
-# -----------------------
+# load experiments
 experiments = list_experiments()
 
 selected = st.sidebar.multiselect(
@@ -75,9 +69,7 @@ for exp in selected:
 
 data = pd.concat(dfs)
 
-# -----------------------
-# Tabs
-# -----------------------
+# tabs
 tab1, tab2, tab3, tab4 = st.tabs([
     "📊 Single Run",
     "📈 Compare",
@@ -85,9 +77,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "⚙️ Config"
 ])
 
-# =======================
-# 1. SINGLE RUN + BEST EP
-# =======================
+# single run + best experiment 
 with tab1:
     st.header("Single Experiment")
 
@@ -99,28 +89,35 @@ with tab1:
     exp_path = [e for e in selected if os.path.basename(e) == exp_name][0]
     df = data[data["experiment"] == exp_name]
 
-    df["reward_smooth"] = df["reward"].rolling(10).mean()
+    df["reward_smooth"] = df["reward"].rolling(window=5).mean()
 
     # BEST EPISODE
-    best_ep = df.loc[df["reward"].idxmax()]["episode"]
+    if "reward" not in df.columns or df["reward"].dropna().empty:
+        st.warning("No reward data yet (training may still be initializing)")
+        best_ep = None
+    else:
+        best_idx = df["reward"].dropna().idxmax()
+        best_ep = df.loc[best_idx, "episode"]
 
-    colA, colB = st.columns(2)
+    if best_ep is not None:
 
-    with colA:
-        fig = px.line(df, x="episode", y="reward", title="Reward")
-        st.plotly_chart(fig, use_container_width=True)
+        colA, colB = st.columns(2)
 
-    with colB:
-        fig = px.line(df, x="episode", y="reward_smooth", title="Smoothed")
-        st.plotly_chart(fig, use_container_width=True)
+        with colA:
+            fig = px.line(df, x="episode", y="reward", title="Reward")
+            st.plotly_chart(fig, width='stretch')
 
-    st.success(f"🏆 Best Episode: {int(best_ep)}")
+        with colB:
+            fig = px.line(df, x="episode", y="reward_smooth", title="Smoothed")
+            st.plotly_chart(fig, width='stretch')
+
+        st.success(f"🏆 Best Episode: {int(best_ep)}")
 
     # Policy behavior
     st.subheader("Policy Behavior")
 
     fig = px.line(df, x="episode", y="entropy", title="Entropy (Exploration)")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
     # Action mix
     action_cols = [
@@ -130,11 +127,9 @@ with tab1:
     ]
 
     fig = px.area(df, x="episode", y=action_cols, title="Action Distribution Over Time")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
-# =======================
-# 2. COMPARE
-# =======================
+# comparison
 with tab2:
     st.header("Compare Experiments")
 
@@ -152,11 +147,9 @@ with tab2:
             name=name
         ))
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch')
 
-# =======================
-# 3. DRILLDOWN + CLAIM UI
-# =======================
+# drilldown + claim
 with tab3:
     st.header("Episode Drilldown")
 
@@ -169,9 +162,33 @@ with tab3:
     exp_path = [e for e in selected if os.path.basename(e) == exp_name][0]
     df = data[data["experiment"] == exp_name]
 
-    ep = st.slider("Episode", int(df["episode"].min()), int(df["episode"].max()))
+    # Clean episode column
+    df = df.copy()
+
+    df["episode"] = pd.to_numeric(df["episode"], errors="coerce")
+    df["reward"] = pd.to_numeric(df["reward"], errors="coerce")
+    df = df.dropna(subset=["episode", "reward"])
+
+    # GUARD
+    if df.empty:
+        st.warning("No episode data yet (training still initializing)")
+        st.stop()
+
+    ep_min = int(df["episode"].min())
+    ep_max = int(df["episode"].max())
+
+    # GUARD (edge case: single episode)
+    if ep_min == ep_max:
+        ep = ep_min
+        st.info(f"Only one episode available: {ep}")
+    else:
+        ep = st.slider("Episode", ep_min, ep_max)
 
     traj = load_trajectory(exp_path, ep)
+
+    if not traj:
+        st.warning("Trajectory not available yet for this episode")
+        st.stop()
 
     if traj:
         # CLAIM
@@ -195,6 +212,39 @@ with tab3:
 
         st.json(step)
 
+        st.subheader("Policy Distribution")
+
+        probs = step.get("action_probs")
+        names = step.get("action_names")
+        chosen_idx = step.get("action_idx")
+        entropy = step.get("entropy")
+
+        if probs and names:
+            df_probs = pd.DataFrame({
+                "action": names,
+                "probability": probs
+            })
+
+            fig = px.bar(
+                df_probs,
+                x='action',
+                y='probability',
+                title='Action Probabilities'
+            )
+
+            st.plotly_chart(fig, width = 'stretch')
+
+            if chosen_idx is not None:
+                st.success(f"Chosen Action: {names[chosen_idx]}")
+
+        st.subheader("Policy Evolution")
+
+        traj_df = pd.DataFrame(traj)
+
+        if "entropy" in traj_df:
+            fig = px.line(traj_df, x='step', y='entropy', title='Entropy Over Steps')
+            st.plotly_chart(fig, width='stretch')
+
         # Highlight selected
         st.subheader("Selected Evidence")
 
@@ -204,9 +254,7 @@ with tab3:
             if e["id"] in selected_ids:
                 st.success(f"[{e['id']}] {e['text']}")
 
-# =======================
-# 4. CONFIG
-# =======================
+# config
 with tab4:
     st.header("Configs")
 
@@ -214,9 +262,7 @@ with tab4:
         st.subheader(name)
         st.json(cfg)
 
-# -----------------------
-# Live Refresh
-# -----------------------
+# live refresh
 if auto_refresh:
     time.sleep(refresh_rate)
     st.rerun()
