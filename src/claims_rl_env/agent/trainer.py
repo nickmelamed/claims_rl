@@ -2,168 +2,192 @@ import numpy as np
 import json
 
 from claims_rl_env.utils.experiment import ExperimentTracker
-from claims_rl_env.agent.bandit import EpsilonGreedyBandit
+from claims_rl_env.agent.bandit import LinUCBBandit
 from claims_rl_env.agent.policy_gradient import PolicyGradient
 from claims_rl_env.agent.ppo import PPO
 from claims_rl_env.environment.actions import Actions, ACTIONS
+from claims_rl_env.agent.policy import encode_state
 
 
 class Trainer:
-    def __init__(self, env, policy, episodes=50, algo="pg", exp_name="default"):
+    def __init__(self, env, policy, config, episodes=50, algo="ppo", exp_name="exp"):
         self.env = env
         self.policy = policy
+        self.config = config
         self.episodes = episodes
         self.algo = algo
-
         self.tracker = ExperimentTracker(exp_name)
 
-        n_actions = len(ACTIONS)
-
-        if algo == 'bandit':
-            self.rl = EpsilonGreedyBandit(n_actions=n_actions)
-        elif algo == 'pg':
-            self.rl = PolicyGradient(policy)
-        elif algo == 'ppo':
-            self.rl = PPO(policy)
-        else:
-            raise ValueError(f"Unknown algorithm: {algo}")
-
-        # Save config
         self.tracker.save_config({
-            "rl_method": algo,
-            "num_episodes": episodes,
-            "policy": policy.__class__.__name__,
-            "environment": env.__class__.__name__,
-            "dataset_size": len(env.dataset),
+            "algo": self.algo,
+            "policy_type": self.policy.__class__.__name__,
+            "episodes": self.episodes,
+
+            # RL config
+            "lr": getattr(self.config, "lr", None),
+            "gamma": getattr(self.config, "gamma", None),
+
+            # PPO
+            "clip": getattr(self.config, "clip", None),
+            "entropy_coef": getattr(self.config, "entropy_coef", None),
+            "value_coef": getattr(self.config, "value_coef", None),
+
+            # Bandit
+            "alpha": getattr(self.config, "alpha", None),
+
+            # Policy
+            "state_dim": getattr(self.policy, "state_dim", None),
         })
 
-    def train(self):
-        results = []
+        # RL selection
+        if algo == "ppo":
+            assert hasattr(config, "clip"), "PPOConfig required"
+            self.rl = PPO(policy, config)
 
+        elif algo == "pg":
+            assert hasattr(config, "lr"), "PGConfig required"
+            self.rl = PolicyGradient(policy, lr=config.lr)
+
+        elif algo == "bandit":
+            self.rl = LinUCBBandit(
+                n_actions=len(policy.actions),
+                d=policy.state_dim,
+                alpha=config.epsilon
+            )
+
+        else:
+            raise ValueError(f"Unknown algo: {algo}")
+
+    def train(self):
         for ep in range(self.episodes):
+
             state = self.env.reset()
             done = False
 
-            total_reward = 0.0
+            total_reward = 0
+            total_tokens = 0
             steps = 0
 
-            # trajectory storage
-            rl_trajectory = []
-            viz_trajectory = []
-
-            # behavior tracking
-            support_count = 0
-            contradict_count = 0
-            removed_count = 0
+            trajectory = []
+            viz = []
 
             while not done:
 
-                # action selection 
-                if self.algo == 'bandit':
-                    action_idx = self.rl.select_action()
-                    action = list(Actions)[action_idx]
+                steps += 1
 
-                    if action == Actions.SELECT:
-                        doc = np.random.choice(state.evidence_pool)
-                        payload = doc.id
-                    elif action in [Actions.SUPPORT, Actions.CONTRADICT]:
-                        payload = "Generated argument"
-                    else:
-                        payload = None
+                # action selection 
+                if self.algo == "bandit":
+                    x = encode_state(state)
+                    action_idx = self.rl.select_action(x)
+                    action = self.policy.actions[action_idx]
+
+                    # reuse policy for payload
+                    _, payload, _ = self.policy.act(state)
+
+                    prob = None
+                    value = None
 
                 else:
-                    action, payload = self.policy.act(state)
-                    action_idx = self.policy.actions.index(action)
+                    action, payload, action_idx = self.policy.act(state)
 
-                # env step
-                next_state, reward, done, _ = self.env.step(action, payload)
+                    prob = self.policy.get_probs(state)[action_idx]
+                    value = self.policy.get_value(state)
 
-                # track behavior 
-                if action == Actions.SUPPORT or action == "generate_support_argument":
-                    support_count += 1
-                elif action == Actions.CONTRADICT or action == "generate_contradict_argument":
-                    contradict_count += 1
-                elif action == Actions.REMOVE or action == "remove_evidence":
-                    removed_count += 1
+                # env step 
+                next_state, reward, done, info = self.env.step(action, payload)
 
-                probs = getattr(self.policy, "last_probs", None)
-
-                # trajectory entry
-                argument = None
-                evidence_ids = None
+                llm_scores = info.get("llm_scores", {})
+                llm_reward = info.get("llm_reward", 0)
 
                 if isinstance(payload, dict):
-                    argument = payload.get("argument")
-                    evidence_ids = payload.get("evidence")
+                    total_tokens += payload.get("tokens", 0)
 
-                viz_trajectory.append({
-                    "step": steps + 1,
-                    "action": str(action),
-                    "reward": float(reward),
-                    "argument": argument,
-                    "evidence_used": evidence_ids,
-                    "selected_ids": [e.id for e in next_state.selected_evidence],
-                    "action_probs": probs.tolist() if probs is not None else None,
-                    "action_names": [str(a) for a in ACTIONS],
-                    "entropy": getattr(self.policy, "last_entropy", None),
-
-                    # evidence + claim 
-                    "claim": state.claim,
-                    "evidence_pool": [
-                        {"id": e.id, "text": e.text}
-                        for e in state.evidence_pool
-                    ]
+                # store unified trajectory 
+                trajectory.append({
+                    "state": state,
+                    "action_idx": action_idx,
+                    "reward": reward,
+                    "prob": prob,
+                    "value": value
                 })
 
-                # RL storage 
-                if self.algo == 'ppo':
-                    old_prob = self.policy.get_probs()[action_idx]  # 🔥 FIX
-                    rl_trajectory.append((state, action_idx, old_prob, reward))
+                # online bandit update 
+                if self.algo == "bandit":
+                    self.rl.update(action_idx, x, reward)
 
-                elif self.algo == 'pg':
-                    rl_trajectory.append((state, action_idx, reward))
+                viz.append({
+                "step": steps,
 
-                elif self.algo == 'bandit':
-                    self.rl.update(action_idx, reward)
+                "action": action,
+                "action_idx": action_idx,
+
+                "reward": reward,
+                "llm_reward": llm_reward,
+
+                "entropy": self.policy.last_entropy,
+
+                # POLICY INFO
+                "action_probs": self.policy.last_probs.tolist(),
+                "policy_type": self.policy.__class__.__name__,
+
+                # VALUE FUNCTION (Actor-Critic)
+                "value_estimate": value,
+
+                # ADVANTAGE SIGNAL
+                "advantage": reward - value if value is not None else None,
+
+                # LLM SCORES
+                "llm_scores": llm_scores,
+
+                # TOKEN USAGE
+                "tokens": payload.get("tokens", 0) if isinstance(payload, dict) else 0,
+
+                "selected_ids": [e.id for e in next_state.selected_evidence],
+                "claim": state.claim,
+                "evidence_pool": [
+                    {"id": e.id, "text": e.text}
+                    for e in next_state.evidence_pool
+                ]
+            })
 
                 state = next_state
                 total_reward += reward
-                steps += 1
 
-            # policy update 
-            if self.algo == 'pg':
-                self.rl.update(rl_trajectory)
+            # episode-level policy update 
+            if self.algo == "ppo":
+                self.rl.update([
+                    (
+                        t["state"],
+                        t["action_idx"],
+                        t["prob"],
+                        t["reward"],
+                        t["value"]
+                    )
+                    for t in trajectory
+                ])
 
-            elif self.algo == 'ppo':
-                self.rl.update(rl_trajectory)
+            elif self.algo == "pg":
+                self.rl.update([
+                    (
+                        t["state"],
+                        t["action_idx"],
+                        t["reward"]
+                    )
+                    for t in trajectory
+                ])
 
-            # metrics logging 
+            # bandit already updated online
+
+            # LOGGING
             metrics = {
                 "episode": ep,
-                "reward": float(total_reward),
+                "reward": total_reward,
                 "num_steps": steps,
-                "final_decision": getattr(state, "final_decision", None),
-                "correct": getattr(state, "correct", None),
-                "num_selected": len(state.selected_evidence),
-                "num_removed": removed_count,
-                "num_support_actions": support_count,
-                "num_contradict_actions": contradict_count,
-                "entropy": getattr(self.policy, "last_entropy", None),
+                "entropy": self.policy.last_entropy,
+                "tokens": total_tokens 
             }
 
-            results.append(metrics)
-
             self.tracker.log_episode(metrics)
+            self.tracker.save_trajectory(ep, viz)
 
-            # save trajectory
-            self.tracker.save_trajectory(ep, viz_trajectory)
-
-            print(
-                f"Episode {ep:03d} | "
-                f"Reward: {total_reward:.3f} | "
-                f"Steps: {steps}"
-            )
-
-        self.tracker.save_summary()
-
-        return results
+            print(f"Ep {ep} | Reward {total_reward:.3f}")

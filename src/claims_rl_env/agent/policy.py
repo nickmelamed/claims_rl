@@ -2,30 +2,109 @@ import numpy as np
 from claims_rl_env.environment.actions import Actions, ACTIONS
 from claims_rl_env.agent.llm_client import LLMClient
 
+STATE_DIM = 4
+
+def encode_state(state):
+    return np.array([
+        len(state.selected_evidence) / 5,
+        len(state.evidence_pool) / 10,
+        len(state.debate_history) / 5,
+        state.steps_taken / state.max_steps
+    ], dtype=float)
+
+class ActorCriticPolicy:
+    def __init__(self, n_actions, state_dim=STATE_DIM):
+        self.actions = ACTIONS
+        self.n_actions = n_actions
+        self.state_dim = state_dim
+
+        # Actor
+        self.actor_params = np.random.randn(state_dim, n_actions) * 0.01
+
+        # Critic (value function)
+        self.value_params = np.zeros(state_dim)
+
+        self.llm = LLMClient()
+
+    def get_logits(self, state):
+        features = encode_state(state)
+        return features @ self.actor_params
+
+    def get_probs(self, state):
+        logits = self.get_logits(state)
+        logits -= np.max(logits)
+        exp = np.exp(logits)
+        return exp / np.sum(exp)
+
+    def get_value(self, state):
+        features = encode_state(state)
+        return features @ self.value_params
+
+    def act(self, state):
+        probs = self.get_probs(state)
+
+        entropy = -np.sum(probs * np.log(probs + 1e-8))
+        self.last_entropy = entropy
+        self.last_probs = probs.copy()
+
+        idx = np.random.choice(self.n_actions, p=probs)
+        action = self.actions[idx]
+
+        if action == Actions.SELECT:
+            doc = np.random.choice(state.evidence_pool)
+            return action, doc.id, idx
+
+        elif action in [Actions.SUPPORT, Actions.CONTRADICT]:
+            texts = [e.text for e in state.selected_evidence]
+
+            argument, tokens = self.llm.generate(
+                f"""
+Claim: {state.claim}
+Evidence: {texts}
+Write a concise {action.lower()} argument.
+"""
+            )
+
+            return action, {
+                "argument": argument,
+                "evidence_ids": [e.id for e in state.selected_evidence],
+                "tokens": tokens
+            }, idx
+
+        return action, None, idx
+
+    def grad_log_prob(self, state, action_idx):
+        probs = self.get_probs(state)
+        grad = -probs
+        grad[action_idx] += 1
+
+        features = encode_state(state)
+        return np.outer(features, grad)
 
 class SoftmaxPolicy:
     def __init__(self, n_actions):
         self.actions = ACTIONS
         self.n_actions = n_actions
-        self.params = np.zeros(n_actions)  # logits
+        self.params = np.random.randn(STATE_DIM, n_actions)
 
         finalize_idx = self.actions.index(Actions.FINALIZE)
         self.params[finalize_idx] = -2.0
 
         self.llm = LLMClient()
 
-    def get_logits(self):
-        return self.params
+    def get_logits(self, state):
+        features = encode_state(state)
+        return features @ self.params
 
-    def get_probs(self):
-        logits = self.get_logits()
+    def get_probs(self, state):
+        logits = self.get_logits(state)
         logits = logits - np.max(logits) # numeric stability
         exp = np.exp(logits)
         return exp / np.sum(exp)
 
 
     def act(self, state):
-        probs = self.get_probs().copy() # make it writable
+        probs = self.get_probs(state).copy() # make it writable
 
         entropy = -np.sum(probs * np.log(probs + 1e-8))
         self.last_entropy = entropy

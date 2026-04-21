@@ -1,48 +1,65 @@
 import numpy as np
+from claims_rl_env.agent.policy import encode_state
 
 
 class PPO:
-    def __init__(self, policy, clip=0.2, lr=0.001):
+    def __init__(self, policy, config):
         self.policy = policy
-        self.clip = clip
-        self.lr = lr
+        self.clip = config.clip
+        self.lr = config.lr
+        self.gamma = config.gamma
+        self.entropy_coef = config.entropy_coef
+        self.value_coef = config.value_coef
+
+    def compute_advantages(self, rewards, values):
+        advantages = []
+        returns = []
+
+        G = 0
+        for r in reversed(rewards):
+            G = r + self.gamma * G
+            returns.insert(0, G)
+
+        returns = np.array(returns)
+        values = np.array(values)
+
+        advantages = returns - values
+        advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
+
+        return returns, advantages
 
     def update(self, trajectories):
+        states, actions, old_probs, rewards, values = zip(*trajectories)
 
-        # unpack
-        states, actions, old_probs, rewards = zip(*trajectories)
+        returns, advantages = self.compute_advantages(rewards, values)
 
-        rewards = np.array(rewards)
-
-        # normalize rewards → acts like advantage
-        mean = np.mean(rewards)
-        std = np.std(rewards) + 1e-8
-        advantages = (rewards - mean) / std
-
-        for state, action_idx, old_prob, adv in zip(states, actions, old_probs, advantages):
-
-            probs = self.policy.get_probs()
+        for state, action_idx, old_prob, ret, adv in zip(
+            states, actions, old_probs, returns, advantages
+        ):
+            probs = self.policy.get_probs(state)
             new_prob = probs[action_idx]
 
             ratio = new_prob / (old_prob + 1e-8)
 
-            # clipped objective
             unclipped = ratio * adv
             clipped = np.clip(ratio, 1 - self.clip, 1 + self.clip) * adv
 
-            # PPO objective = maximize min(...)
-            objective = min(unclipped, clipped)
+            actor_loss = -min(unclipped, clipped)
 
-            # gradient of log policy
-            grad = self.policy.grad_log_prob(action_idx)
-            grad = np.array(grad)
+            # entropy bonus
+            entropy = -np.sum(probs * np.log(probs + 1e-8))
+            actor_loss -= self.entropy_coef * entropy
 
-            # gradient ascent
-            update = self.lr * objective * grad
+            # value loss
+            value = self.policy.get_value(state)
+            value_loss = (ret - value) ** 2
 
-            # safe update
-            self.policy.params = self.policy.params + update
+            # gradients
+            grad_actor = self.policy.grad_log_prob(state, action_idx)
+            features = encode_state(state)
 
-            # safety check 
-            if self.policy.params.ndim != 1:
-                raise ValueError(f"Params broke shape: {self.policy.params}")
+            grad_value = features * (ret - value)
+
+            # updates
+            self.policy.actor_params -= self.lr * actor_loss * grad_actor
+            self.policy.value_params += self.lr * self.value_coef * grad_value

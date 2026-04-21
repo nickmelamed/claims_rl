@@ -1,16 +1,20 @@
 from claims_rl_env.environment.environment import ClaimEnv
 from claims_rl_env.data.dataset import load_dataset
-from claims_rl_env.agent.llm_client import LLMClient
-from claims_rl_env.agent.policy import SoftmaxPolicy
+from claims_rl_env.agent.policy import SoftmaxPolicy, ActorCriticPolicy
 from claims_rl_env.environment.actions import ACTIONS
 
+import argparse
 
-def main():
+
+def run(policy='actor'):
     dataset = load_dataset()
 
     env = ClaimEnv(dataset)
 
-    policy = SoftmaxPolicy(len(ACTIONS))
+    if policy == 'actor':
+        policy = ActorCriticPolicy(len(list(ACTIONS)))
+    elif policy == 'softmax':
+        policy = SoftmaxPolicy(len(list(ACTIONS)))
 
     state = env.reset()
     done = False
@@ -36,6 +40,12 @@ def main():
     print("Steps:", step)
     print("Final Reward:", round(reward, 3))
 
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--policy", type=str, default='actor')
+    args = parser.parse_args()
+
+    run(args.policy)
 
 if __name__ == "__main__":
     main()

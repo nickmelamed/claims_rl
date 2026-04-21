@@ -2,22 +2,20 @@ import numpy as np
 
 
 class PolicyGradient:
-    def __init__(self, policy, lr=0.01):
+    def __init__(self, policy, config):
         self.policy = policy
-        self.lr = lr
+        self.lr = config.lr
 
     def update(self, trajectories):
         rewards = [r for (_, _, r) in trajectories]
+
         mean = np.mean(rewards)
         std = np.std(rewards) + 1e-8
 
-        for _, action_idx, reward in trajectories:
+        for state, action_idx, reward in trajectories:
 
-            normalized_reward = (reward - mean) / std
+            norm_r = (reward - mean) / std
 
-            grad = self.policy.grad_log_prob(action_idx)
-            grad = np.array(grad)
+            grad = self.policy.grad_log_prob(state, action_idx)
 
-            update = self.lr * grad * normalized_reward
-
-            self.policy.params = self.policy.params + update
+            self.policy.actor_params += self.lr * norm_r * grad

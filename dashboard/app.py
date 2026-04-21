@@ -86,10 +86,58 @@ with tab1:
         [os.path.basename(e) for e in selected]
     )
 
+    cfg = configs.get(exp_name, {})
+
+    st.subheader("Experiment Setup")
+
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        st.metric("Algorithm", cfg.get("algo", "N/A"))
+        st.metric("Policy", cfg.get("policy_type", "N/A"))
+
+    with col2:
+        st.metric("LR", cfg.get("lr", "N/A"))
+        st.metric("Gamma", cfg.get("gamma", "N/A"))
+
+    with col3:
+        st.metric("Clip", cfg.get("clip", "N/A"))
+        st.metric("Entropy Coef", cfg.get("entropy_coef", "N/A"))
+
     exp_path = [e for e in selected if os.path.basename(e) == exp_name][0]
     df = data[data["experiment"] == exp_name]
 
     df["reward_smooth"] = df["reward"].rolling(window=5).mean()
+
+    st.subheader("LLM Evaluation Metrics")
+
+    traj_all = []
+    for ep in df["episode"].unique():
+        traj = load_trajectory(exp_path, int(ep))
+        traj_all.extend(traj)
+
+    traj_df = pd.DataFrame(traj_all)
+
+    if "llm_scores" in traj_df:
+        traj_df["LCS"] = traj_df["llm_scores"].apply(lambda x: x.get("LCS", 0))
+        traj_df["ESS"] = traj_df["llm_scores"].apply(lambda x: x.get("ESS", 0))
+        traj_df["HRS"] = traj_df["llm_scores"].apply(lambda x: x.get("HRS", 0))
+
+        fig = px.line(traj_df, y=["LCS", "ESS", "HRS"], title="LLM Scores Over Time")
+        st.plotly_chart(fig, width='stretch')
+    
+    # value estimate for actor critic 
+    if "value_estimate" in traj_df:
+        fig = px.line(traj_df, x="step", y="value_estimate", title="Value Estimates")
+        st.plotly_chart(fig)
+
+    if "advantage" in traj_df:
+        fig = px.line(traj_df, x="step", y="advantage", title="Advantage Signal")
+        st.plotly_chart(fig)
+
+    # token usage 
+    fig = px.line(df, x="episode", y="tokens", title="Token Usage")
+    st.plotly_chart(fig, width='stretch')
 
     # BEST EPISODE
     if "reward" not in df.columns or df["reward"].dropna().empty:
@@ -144,7 +192,7 @@ with tab2:
             x=df["episode"],
             y=df["reward_smooth"],
             mode='lines',
-            name=name
+            name=f"{name} ({configs[name].get('algo')})"
         ))
 
     st.plotly_chart(fig, width='stretch')
@@ -206,9 +254,34 @@ with tab3:
         # REPLAY
         st.subheader("Step Replay")
 
-        step_idx = st.slider("Step", 1, len(traj))
+        if len(traj) == 0:
+            st.warning("No steps recorded for this episode")
+            st.stop()
+
+        step_min = 1
+        step_max = len(traj)
+
+        if step_min == step_max:
+            step_idx = step_min
+            st.info(f"Only one step available: {step_idx}")
+        else:
+            step_idx = st.slider("Step", step_min, step_max)
 
         step = traj[step_idx - 1]
+
+        st.subheader("LLM Evaluation")
+
+        llm_scores = step.get("llm_scores", {})
+        if llm_scores:
+            st.json(llm_scores)
+
+        st.metric("Tokens Used", step.get("tokens", 0))
+
+        if step.get("value_estimate") is not None:
+            st.metric("Value Estimate", round(step["value_estimate"], 3))
+
+        if step.get("advantage") is not None:
+            st.metric("Advantage", round(step["advantage"], 3))
 
         st.subheader("Generated Argument")
 
@@ -275,7 +348,14 @@ with tab4:
 
     for name, cfg in configs.items():
         st.subheader(name)
-        st.json(cfg)
+        st.subheader("Algorithm")
+        st.write(cfg.get("algo"))
+
+        st.subheader("Policy")
+        st.write(cfg.get("policy_type"))
+
+        st.subheader("Hyperparameters")
+        st.table(pd.DataFrame(cfg.items(), columns=["param", "value"]))
 
 # live refresh
 if auto_refresh:

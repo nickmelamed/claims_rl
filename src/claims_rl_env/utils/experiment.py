@@ -15,6 +15,9 @@ FIXED_FIELDS = [
     "num_support_actions",
     "num_contradict_actions",
     "entropy",
+    "tokens",
+    "policy_type",
+    "algo"
 ]
 
 
